@@ -2,18 +2,19 @@ import numpy as np
 import json
 import re
 import math
-
-
+import main
+import random
 class Util:
     def __init__(self):
-        self.vocab_size = 2000
+        self.Config = main.Config()
+        self.vocab_size = self.Config.vocab_size
+        self.special_chars = self.Config.special_chars
+        self.num_of_questions = self.Config.total_examples
+        self.num_of_paragraphs = self.Config.num_of_paragraphs
+        self.glove_dimensionality = self.Config.glove_dimensionality
+
         self.largest_num_of_sentences = 0
         self.largest_num_of_words = 0
-        self.special_chars = ["'", "/", ")", "(", "/", "'", "[", "{", "]", "}", "#", "$", "%", "^", "&", "*", "-", "_", "+", "=",
-                         ".", "\"", ",", ":", ";"]
-        self.num_of_questions = 2000
-        self.num_of_paragraphs = int(math.floor(self.num_of_questions / 4))
-        self.glove_dimensionality = 100
         self.glove_lookup = self.initialise_glove_embeddings()
         self.glove_lookup_dict = {}
 
@@ -23,12 +24,13 @@ class Util:
             self.glove_lookup_dict[index] = vector
 
         self.glove_lookup_dict_reversed = {}
-        self.questions_list, self.paragraphs_list, self.answers_list, self.paragraph_question_mapping = self.read_squad()
+        self.questions_list, self.paragraphs_list, self.answers_list = self.read_squad()
         self.largest_num_of_sentences, self.largest_num_of_words, self.largest_num_of_words_any_paragraph = self.count_words_paragraphs_in_squad()
+        self.largest_num_of_words_in_answer = self.get_largest_num_of_words_in_answer()
 
     def initialise_glove_embeddings(self):
-        glove_path = 'glove.6B.100d.txt'
-        glove_lookup = np.zeros(self.vocab_size, dtype='(100)string, (1,' + str(self.glove_dimensionality) + ')float')
+        glove_path = 'glove.6B.200d.txt'
+        glove_lookup = np.zeros(self.vocab_size, dtype='(200)string, (1,' + str(self.glove_dimensionality) + ')float')
         embedding_text = np.genfromtxt(glove_path, delimiter='\n', dtype='string')
         j = 0
         for word_embedding_line in embedding_text:
@@ -106,10 +108,11 @@ class Util:
     def read_squad(self):
         data = self.parse_squad()
         number_of_answers, number_of_questions, number_of_paragraphs = self.count_squad()
-        questions_list = ['x' for i in range(number_of_questions)]
-        answers_list = ['x' for i in range(number_of_answers)]
-        paragraphs_list = ['x' for i in range(number_of_paragraphs)]
+        questions_list = []#['x' for i in range(number_of_questions)]
+        answers_list = []#['x' for i in range(number_of_answers)]
+        paragraphs_list = []#['x' for i in range(number_of_paragraphs)]
         paragraph_question_mapping = [0 for i in range(number_of_questions)]
+        examples = []
         paragraph_num = 0
         answer_num = 0
         question_num = 0
@@ -117,52 +120,33 @@ class Util:
             paragraphs = text["paragraphs"]
             for paragraph in paragraphs:
                 context = paragraph["context"]
-                paragraphs_list[paragraph_num] = context
+                #paragraphs_list[paragraph_num] = context
                 qas = paragraph["qas"]
                 for qa in qas:
                     question = qa["question"]
-                    questions_list[question_num] = question
+                    #questions_list[question_num] = question
                     answers = qa["answers"]
                     for answer in answers:
                         answer_text = answer["text"]
-                        answers_list[answer_num] = answer_text
-                        paragraph_question_mapping[answer_num] = paragraph_num
+                        #answers_list[answer_num] = answer_text
+                        #paragraph_question_mapping[answer_num] = paragraph_num
+                        example = [answer_text, question, context]
+                        examples.append(example)
                         answer_num = answer_num + 1
                     question_num = question_num + 1
                 paragraph_num = paragraph_num + 1
-        return questions_list, paragraphs_list, answers_list, paragraph_question_mapping
+        random.shuffle(examples)
+        for element in examples:
+            answers_list.append(element[0])
+            questions_list.append(element[1])
+            paragraphs_list.append(element[2])
+        return questions_list, paragraphs_list, answers_list#, paragraph_question_mapping
 
     def count_words_paragraphs_in_squad(self):
-        largest_num_of_sentences = 0
-        largest_num_of_words = 0
-        largest_num_of_words_any_paragraph = 0
-        paragraphs = self.paragraphs_list[:self.num_of_paragraphs]
-        for paragraph in paragraphs:
-            sentences = re.split('(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?)\s', paragraph)
-            num_of_words = 0
-            for sentence in sentences:
-                words = sentence.split(' ')
-                num_of_special_chars = 0
-                for word in words:
-                    characters = list(word)
-                    if len(characters) > 0:
-                        if characters[0] in self.special_chars:
-                            num_of_special_chars = num_of_special_chars + 1
-                        if characters[len(characters) - 1] in self.special_chars:
-                            num_of_special_chars = num_of_special_chars + 1
-                        if "'" in word and characters[0] not in "'" and characters[len(characters) - 1] not in "'":
-                            num_of_special_chars = num_of_special_chars + 1
-                num_of_words = num_of_words + num_of_special_chars + len(words)
-                if len(words) + num_of_special_chars > largest_num_of_words:
-                    largest_num_of_words = len(words) + num_of_special_chars
-            if num_of_words > largest_num_of_words_any_paragraph:
-                largest_num_of_words_any_paragraph = num_of_words
-            if len(sentences) > largest_num_of_sentences:
-                largest_num_of_sentences = len(sentences)
-        return largest_num_of_sentences, largest_num_of_words, largest_num_of_words_any_paragraph
+        return 200, 200, 200#largest_num_of_sentences, largest_num_of_words, 200# largest_num_of_words_any_paragraph
 
-    def vectorise_paragraphs(self):
-        paragraphs = self.paragraphs_list[:self.num_of_paragraphs]
+    def vectorise_paragraphs(self, start, stop):
+        paragraphs = self.paragraphs_list[start:stop]
         paragraphs_sentences = np.zeros((len(paragraphs), self.largest_num_of_words_any_paragraph, self.glove_dimensionality))
         i = 0
         for paragraph in paragraphs:
@@ -177,6 +161,8 @@ class Util:
                             glove_embedding = self.get_glove_embedding(characters[0])
                             paragraphs_sentences[i][v] = glove_embedding
                             v = v + 1
+                            if v>=self.largest_num_of_words_any_paragraph:
+                                break
                             word = word[1:]
                         if characters[len(characters) - 1] in self.special_chars:
                             word = word[:-1]
@@ -186,17 +172,25 @@ class Util:
                             glove_embedding = self.get_glove_embedding(apostrophe_word[0])
                             paragraphs_sentences[i][v] = glove_embedding
                             v = v + 1
+                            if v>=self.largest_num_of_words_any_paragraph:
+                                break
                             glove_embedding = self.get_glove_embedding("'" + apostrophe_word[1])
                             paragraphs_sentences[i][v] = glove_embedding
                             v = v + 1
+                            if v>=self.largest_num_of_words_any_paragraph:
+                                break
                         else:
                             glove_embedding = self.get_glove_embedding(word)
                             paragraphs_sentences[i][v] = glove_embedding
                             v = v + 1
+                            if v>=self.largest_num_of_words_any_paragraph:
+                                break
                         if characters[len(characters) - 1] in self.special_chars:
                             glove_embedding = self.get_glove_embedding(characters[len(characters) - 1])
                             paragraphs_sentences[i][v] = glove_embedding
                 v = v + 1
+                if v >= self.largest_num_of_words_any_paragraph:
+                    break
             i = i + 1
         return paragraphs_sentences
 
@@ -239,31 +233,14 @@ class Util:
 
 
     def get_largest_num_of_words_in_answer(self):
-        answers = self.answers_list[:self.num_of_questions]
-        self.largest_num_of_words = 0
-        for answer in answers:
-            words = answer.split(' ')
-            v = 0;
-            num_of_special_chars = 0
-            for word in words:
-                characters = list(word)
-                if len(characters) > 0:
-                    if characters[0] in self.special_chars:
-                        num_of_special_chars = num_of_special_chars + 1
-                    if characters[len(characters) - 1] in self.special_chars:
-                        num_of_special_chars = num_of_special_chars + 1
-                    if "'" in word and characters[0] not in "'" and characters[len(characters) - 1] not in "'":
-                        num_of_special_chars = num_of_special_chars + 1
-            if len(words) + num_of_special_chars > self.largest_num_of_words:
-                self.largest_num_of_words = len(words) + num_of_special_chars
-        return self.largest_num_of_words
+        return 5# self.largest_num_of_words
 
     def get_largest_num_of_words_in_question(self):
         questions = self.questions_list[:self.num_of_questions]
         self.largest_num_of_words = 0
         for question in questions:
             words = question.split(' ')
-            v = 0;
+            v = 0
             num_of_special_chars = 0
             for word in words:
                 characters = list(word)
@@ -283,13 +260,6 @@ class Util:
         answers = self.answers_list[start:stop]
         answers_words = np.zeros((len(answers), largest_num_of_words_in_answer, self.vocab_size))
         j = 0
-        answer_num = 0
-        for answer in answers_words:
-            entry_num = 0
-            for entry in answer:
-                answers_words[answer_num][entry_num][self.vocab_size-1] = 1
-                entry_num = entry_num + 1
-            answer_num = answer_num + 1
         for answer in answers:
             words = answer.split(' ')
             v = 0
@@ -302,6 +272,8 @@ class Util:
                                 glove_embedding = self.get_one_hot_encoded_from_glove(characters[0])
                                 answers_words[j][v] = glove_embedding
                                 v = v + 1
+                                if v==largest_num_of_words_in_answer:
+                                    break
                                 word = word[1:]
                             if characters[len(characters) - 1] in self.special_chars:
                                 word = word[:-1]
@@ -311,31 +283,61 @@ class Util:
                                 glove_embedding = self.get_one_hot_encoded_from_glove(apostrophe_word[0])
                                 answers_words[j][v] = glove_embedding
                                 v = v + 1
+                                if v==largest_num_of_words_in_answer:
+                                    break
                                 glove_embedding = self.get_one_hot_encoded_from_glove("'" + apostrophe_word[1])
                                 answers_words[j][v] = glove_embedding
                                 v = v + 1
+                                if v==largest_num_of_words_in_answer:
+                                    break
                             else:
                                 glove_embedding = self.get_one_hot_encoded_from_glove(word)
                                 answers_words[j][v] = glove_embedding
                                 v = v + 1
+                                if v==largest_num_of_words_in_answer:
+                                    break
                             if characters[len(characters) - 1] in self.special_chars:
                                 glove_embedding = self.get_one_hot_encoded_from_glove(characters[len(characters) - 1])
                                 answers_words[j][v] = glove_embedding
                                 v = v + 1
-                    if x==0:
-                        stop_token = np.zeros(self.vocab_size, dtype='float32')
-                        stop_token[self.vocab_size - 1] = 1
-                        answers_words[j][v] = stop_token
-                        v = v + 1
+                                if v==largest_num_of_words_in_answer:
+                                    break
+                    #if x==0:
+                    #    stop_token = np.zeros(self.vocab_size, dtype='float32')
+                    #    stop_token[self.vocab_size - 1] = 1
+                    #    answers_words[j][v] = stop_token
+                    #    v = v + 1
+                    #    if v == largest_num_of_words_in_answer:
+                    #        break
             except:
                 pass
             j = j + 1
         return answers_words
 
     def vectorise_squad(self, start, stop):
-        return self.vectorise_answers(start, stop), self.vectorise_questions(start, stop), self.paragraph_question_mapping[start:stop]
+        return self.vectorise_answers(start, stop), self.vectorise_questions(start, stop), self.vectorise_paragraphs(start, stop)
 
-
+    def get_words(self, classification):
+        vectors = [0 for w in range(self.largest_num_of_words_in_answer)]
+        i = 0
+        for word in classification:
+            j = 0
+            emb_max = 0
+            for emb in word:
+                if emb > emb_max:
+                    emb_max = emb
+                    vector = j
+                j += 1
+            vectors[i] = vector
+            i += 1
+        words = []
+        print vectors
+        for vector in vectors:
+            if vector == self.vocab_size - 1:
+                break
+            else:
+                words.append(self.get_word_from_one_hot_encoded(vector))
+        return words
     # ----------------------------------------------------------------------------------------------------------------------------------------------------
     def return_validatation_set(self):
         data = self.parse_squad()
