@@ -39,8 +39,6 @@ class Train:
                     answer_softmax_save = tf.identity(answer_softmax, name="answer")
             loss = tf.reduce_mean(predicted_answer)
             tf.summary.scalar("loss", loss)
-        print answer_softmax
-        print answer_softmax_save
         optimizer = tf.train.AdamOptimizer(learning_rate=self.l_rate)
 
         #https://stackoverflow.com/questions/36498127/how-to-effectively-apply-gradient-clipping-in-tensor-flow
@@ -61,7 +59,6 @@ class Train:
             file_writer = tf.summary.FileWriter('tflogs', sess.graph)
             for epoch in range(self.num_of_epochs):
                 example_num = 0
-                accuracy = 0
                 for batch in range(self.num_of_batches):
                     answer_num = 0
                     answers, questions, paragraphs = self.util.vectorise_squad\
@@ -94,23 +91,6 @@ class Train:
                                            self.text: paragraph_example})
                             print(epoch, example_num, "Loss: ", acc_train)
 
-                        #measure accuracy
-                        feed_dict = {self.question: question_example, self.text: paragraph_example}
-                        classification = sess.run(answer_softmax, feed_dict)
-                        words = self.util.get_words(classification)
-                        actual_answer = self.util.get_words(answer_example)
-                        #https://stackoverflow.com/questions/2864842/common-elements-comparison-between-2-lists
-                        common_words = list(set(words).intersection(actual_answer))
-                        print actual_answer
-                        print words
-                        num_of_correct_words = len(common_words)
-                        #accuracy = (accuracy*(example_num+1) + (num_of_correct_words/self.largest_num_of_words_in_answer)*100)/(example_num+1)
-                        #if example_num % 10 == 0:
-                        #    print ("Train accuracy: ", accuracy)
-                        if len(actual_answer) > 0:
-                            accuracy = (float(num_of_correct_words) / float(len(actual_answer))) * 100.0
-                        print ("Train accuracy: ", accuracy)
-
                         #save model
                         if example_num % 1000 == 0:
                             builder = tf.saved_model.builder.SavedModelBuilder("model" + str(example_num) + str(epoch))
@@ -122,6 +102,27 @@ class Train:
                         builder.save()
                         answer_num += 1
                         example_num += 1
+
+                #check test accuracy
+                answers_test, questions_test, paragraphs_test =  self.util.vectorise_squad(30000,30010)
+                test_example_num = 0
+                accuracy_list = []
+                #compute accuracy for single examples
+                for answer_test in answers_test:
+                    question_test = questions_test[test_example_num]
+                    paragraph_test = paragraphs_test[test_example_num]
+                    feed_dict = {self.question: question_test, self.text: paragraph_test}
+                    classification = sess.run(answer_softmax, feed_dict)
+                    class_words = self.util.get_words(classification)
+                    actual_words = self.util.get_words(answer_test)
+                    common_words = list(set(class_words).intersection(actual_words))
+                    if len(actual_words) > 0:
+                        example_accuracy = float(len(common_words))/float(len(actual_words))
+                        accuracy_list.append(example_accuracy)
+                    test_example_num+=1
+                #sum and average
+                test_accuracy = sum(accuracy_list) / float(len(accuracy_list))
+                print("Accuracy: ", test_accuracy)
             file_writer.close()
 
 Train().train()

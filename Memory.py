@@ -11,8 +11,6 @@ class Memory:
                         name="A")
         self.C = tf.Variable(tf.random_normal([util.largest_num_of_words_any_paragraph, util.glove_dimensionality, d], stddev=0.1),
                         name="C")
-        #self.m = tf.Variable(tf.zeros([1, d]), trainable=False, name="m")
-        #self.c = tf.Variable(tf.zeros([1, d]), trainable=False)
 
         self.m = tf.squeeze(tf.matmul(text, self.A), 1)
         self.c = tf.squeeze(tf.matmul(text, self.C), 1)
