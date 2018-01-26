@@ -236,7 +236,7 @@ class Util:
         return 5# self.largest_num_of_words
 
     def get_largest_num_of_words_in_question(self):
-        questions = self.questions_list[:self.num_of_questions]
+        questions = self.questions_list[:self.num_of_questions+15000]
         self.largest_num_of_words = 0
         for question in questions:
             words = question.split(' ')

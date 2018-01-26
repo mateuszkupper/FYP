@@ -103,26 +103,29 @@ class Train:
                         answer_num += 1
                         example_num += 1
 
-                #check test accuracy
-                answers_test, questions_test, paragraphs_test =  self.util.vectorise_squad(30000,30010)
-                test_example_num = 0
+                # check test accuracy
+                num_of_test_batches = 20
+                examples_per_batch = 10
                 accuracy_list = []
-                #compute accuracy for single examples
-                for answer_test in answers_test:
-                    question_test = questions_test[test_example_num]
-                    paragraph_test = paragraphs_test[test_example_num]
-                    feed_dict = {self.question: question_test, self.text: paragraph_test}
-                    classification = sess.run(answer_softmax, feed_dict)
-                    class_words = self.util.get_words(classification)
-                    actual_words = self.util.get_words(answer_test)
-                    common_words = list(set(class_words).intersection(actual_words))
-                    if len(actual_words) > 0:
-                        example_accuracy = float(len(common_words))/float(len(actual_words))
-                        accuracy_list.append(example_accuracy)
-                    test_example_num+=1
-                #sum and average
+                for test_batch in range(num_of_test_batches):
+                    test_example_num = 0
+                    answers_test, questions_test, paragraphs_test = self.util.vectorise_squad(
+                        30000 + test_batch * examples_per_batch, 30000 + (test_batch + 1) * examples_per_batch)
+                    # compute accuracy for single examples
+                    for answer_test in answers_test:
+                        question_test = questions_test[test_example_num]
+                        paragraph_test = paragraphs_test[test_example_num]
+                        feed_dict = {self.question: question_test, self.text: paragraph_test}
+                        classification = sess.run(answer_softmax, feed_dict)
+                        class_words = self.util.get_words(classification)
+                        actual_words = self.util.get_words(answer_test)
+                        common_words = list(set(class_words).intersection(actual_words))
+                        if len(actual_words) > 0:
+                            example_accuracy = float(len(common_words)) / float(len(actual_words))
+                            accuracy_list.append(example_accuracy)
+                        test_example_num += 1
+                        # sum and average
                 test_accuracy = sum(accuracy_list) / float(len(accuracy_list))
                 print("Accuracy: ", test_accuracy)
-            file_writer.close()
 
 Train().train()
